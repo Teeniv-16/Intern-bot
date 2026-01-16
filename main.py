@@ -8,15 +8,17 @@ CHAT_ID = os.getenv("TELEGRAM_CHAT_ID")
 DB_FILE = "seen_links.txt"
 
 def send_telegram(text):
-    url = f"https://api.telegram.org/bot{TOKEN}/sendMessage?chat_id={CHAT_ID}&text={text}&parse_mode=Markdown"
-    requests.get(url)
+    # Use 'params' to automatically handle URL encoding of text
+    url = f"https://api.telegram.org/bot{TOKEN}/sendMessage"
+    params = {"chat_id": CHAT_ID, "text": text}
+    response = requests.get(url, params=params)
+    if response.status_code != 200:
+        print(f"Telegram Error: {response.text}")
 
 def run_bot():
     queries = [
         'site:*.com/careers "mechanical engineering" "internship" India',
-        'site:.gov.in "mechanical engineering" "apprenticeship" 2026',
-        'site:unstop.com "mechanical" "internship" "India"',
-        'intitle:"careers" "mechanical engineering" (Tata OR Reliance OR Mahindra OR "L&T")'
+        'site:unstop.com "mechanical" "internship" "India"'
     ]
 
     seen = set()
@@ -25,20 +27,25 @@ def run_bot():
             seen = set(line.strip() for line in f)
 
     for q in queries:
+        print(f"--- Searching Google for: {q} ---")
         try:
-            # We treat 'result' as a simple URL string for maximum compatibility
-            for result_url in search(q, num_results=10): 
-                if result_url not in seen:
-                    # Simplified message using just the URL
-                    msg = f"🇮🇳 *New India Mech-Eng Intern Found*\n\n*Link:* {result_url}"
+            results = list(search(q, num_results=5)) # Reduced to 5 to avoid blocks
+            print(f"Found {len(results)} total links for this query.")
+            
+            for url in results:
+                if url not in seen:
+                    print(f"NEW LINK: {url}")
+                    msg = f"🇮🇳 New Mech-Eng Intern Found!\nLink: {url}"
                     send_telegram(msg)
                     
                     with open(DB_FILE, "a") as f:
-                        f.write(result_url + "\n")
-                    seen.add(result_url)
+                        f.write(url + "\n")
+                    seen.add(url)
                     time.sleep(5)
+                else:
+                    print(f"Already seen: {url}")
         except Exception as e:
-            print(f"Error: {e}")
+            print(f"Google Search Error: {e}")
 
 if __name__ == "__main__":
     run_bot()
