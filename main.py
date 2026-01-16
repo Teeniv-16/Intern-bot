@@ -8,17 +8,16 @@ CHAT_ID = os.getenv("TELEGRAM_CHAT_ID")
 DB_FILE = "seen_links.txt"
 
 def send_telegram(text):
-    # Use 'params' to automatically handle URL encoding of text
     url = f"https://api.telegram.org/bot{TOKEN}/sendMessage"
     params = {"chat_id": CHAT_ID, "text": text}
-    response = requests.get(url, params=params)
-    if response.status_code != 200:
-        print(f"Telegram Error: {response.text}")
+    requests.get(url, params=params)
 
 def run_bot():
+    # India-specific broad queries
     queries = [
-        'site:*.com/careers "mechanical engineering" "internship" India',
-        'site:unstop.com "mechanical" "internship" "India"'
+        'mechanical engineering internship India 2026',
+        'mechanical intern openings India freshers',
+        'site:unstop.com mechanical engineering internship'
     ]
 
     seen = set()
@@ -27,23 +26,17 @@ def run_bot():
             seen = set(line.strip() for line in f)
 
     for q in queries:
-        print(f"--- Searching Google for: {q} ---")
+        print(f"Searching: {q}")
         try:
-            results = list(search(q, num_results=5)) # Reduced to 5 to avoid blocks
-            print(f"Found {len(results)} total links for this query.")
-            
-            for url in results:
+            # We use a lower number (5) to avoid Google blocking GitHub
+            for url in search(q, num_results=5):
                 if url not in seen:
-                    print(f"NEW LINK: {url}")
-                    msg = f"🇮🇳 New Mech-Eng Intern Found!\nLink: {url}"
-                    send_telegram(msg)
-                    
+                    print(f"FOUND NEW: {url}")
+                    send_telegram(f"🇮🇳 New Opening:\n{url}")
                     with open(DB_FILE, "a") as f:
                         f.write(url + "\n")
                     seen.add(url)
                     time.sleep(5)
-                else:
-                    print(f"Already seen: {url}")
         except Exception as e:
             print(f"Google Search Error: {e}")
 
