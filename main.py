@@ -1,10 +1,12 @@
 import os
 import requests
-from googlesearch import search
+from serpapi import GoogleSearch
 import time
 
+# Load all secrets from GitHub environment
 TOKEN = os.getenv("TELEGRAM_TOKEN")
 CHAT_ID = os.getenv("TELEGRAM_CHAT_ID")
+SERP_KEY = os.getenv("SERPAPI_KEY")
 DB_FILE = "seen_links.txt"
 
 def send_telegram(text):
@@ -13,32 +15,39 @@ def send_telegram(text):
     requests.get(url, params=params)
 
 def run_bot():
-    # India-specific broad queries
+    # Targeted queries for Indian Mechanical Engineering
     queries = [
         'mechanical engineering internship India 2026',
-        'mechanical intern openings India freshers',
-        'site:unstop.com mechanical engineering internship'
+        'site:.gov.in mechanical engineering apprenticeship',
+        'site:unstop.com "mechanical engineering" internship'
     ]
 
     seen = set()
     if os.path.exists(DB_FILE):
         with open(DB_FILE, "r") as f:
-            seen = set(line.strip() for line in f)
+            seen = [line.strip() for line in f]
 
     for q in queries:
         print(f"Searching: {q}")
-        try:
-            # We use a lower number (5) to avoid Google blocking GitHub
-            for url in search(q, num_results=5):
-                if url not in seen:
-                    print(f"FOUND NEW: {url}")
-                    send_telegram(f"🇮🇳 New Opening:\n{url}")
-                    with open(DB_FILE, "a") as f:
-                        f.write(url + "\n")
-                    seen.add(url)
-                    time.sleep(5)
-        except Exception as e:
-            print(f"Google Search Error: {e}")
+        search = GoogleSearch({
+            "q": q,
+            "location": "India", # Focus strictly on Indian results
+            "api_key": SERP_KEY
+        })
+        results = search.get_dict()
+        
+        # Pull only organic (natural) results from the JSON
+        for res in results.get("organic_results", []):
+            link = res.get("link")
+            if link not in seen:
+                title = res.get("title", "New Internship Found")
+                msg = f"🇮🇳 *Mech-Eng Intern Found*\n\n{title}\n{link}"
+                send_telegram(msg)
+                
+                with open(DB_FILE, "a") as f:
+                    f.write(link + "\n")
+                seen.append(link)
+                time.sleep(2)
 
 if __name__ == "__main__":
     run_bot()
