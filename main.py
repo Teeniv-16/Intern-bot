@@ -12,7 +12,6 @@ def send_telegram(text):
     requests.get(url)
 
 def run_bot():
-    # India-specific queries including Government sites and PSUs
     queries = [
         'site:*.com/careers "mechanical engineering" "internship" India',
         'site:.gov.in "mechanical engineering" "apprenticeship" 2026',
@@ -27,14 +26,16 @@ def run_bot():
 
     for q in queries:
         try:
-            for result in search(q, num_results=10, advanced=True):
-                url = result.url
-                if url not in seen:
-                    msg = f"🇮🇳 *New India Mech-Eng Intern Found*\n\n*Title:* {result.title}\n*Link:* {url}"
+            # We treat 'result' as a simple URL string for maximum compatibility
+            for result_url in search(q, num_results=10): 
+                if result_url not in seen:
+                    # Simplified message using just the URL
+                    msg = f"🇮🇳 *New India Mech-Eng Intern Found*\n\n*Link:* {result_url}"
                     send_telegram(msg)
+                    
                     with open(DB_FILE, "a") as f:
-                        f.write(url + "\n")
-                    seen.add(url)
+                        f.write(result_url + "\n")
+                    seen.add(result_url)
                     time.sleep(5)
         except Exception as e:
             print(f"Error: {e}")
