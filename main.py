@@ -9,26 +9,12 @@ CHAT_ID = os.getenv("TELEGRAM_CHAT_ID")
 SERP_KEY = os.getenv("SERPAPI_KEY")
 DB_FILE = "seen_links.txt"
 
-# EXPANDED REPUTABLE LISTS
-PSUS = [
-    "DRDO", "ISRO", "BHEL", "IOCL", "ONGC", "NTPC", "HPCL", "BPCL", "HAL", "SAIL", 
-    "BARC", "GAIL", "NHPC", "RVNL", "BEL", "Mazagon Dock", "GRSE", "BDL"
-]
-
-# REPUTABLE LISTED COMPANIES (NSE/BSE)
+# LISTED FIRMS & PSUS (Expanded)
+PSUS = ["DRDO", "ISRO", "BHEL", "IOCL", "ONGC", "NTPC", "HPCL", "BPCL", "HAL", "SAIL", "BEL", "GAIL", "NHPC"]
 LISTED_FIRMS = [
-    # Top Tier / Large Cap
-    "Larsen & Toubro", "L&T", "Tata Motors", "Tata Steel", "Mahindra & Mahindra", "M&M",
-    "Maruti Suzuki", "Ashok Leyland", "Reliance Industries", "RIL", "Adani Enterprises",
-    # Engineering & Capital Goods
-    "Siemens", "ABB India", "Cummins India", "Thermax", "Honeywell Automation", 
-    "Kirloskar Brothers", "Kirloskar Pneumatic", "Elecon Engineering", "Esab India",
-    "CG Power", "AIA Engineering", "Bharat Forge", "Sundram Fasteners", "Triveni Turbine",
-    # Automotive & Components
-    "Bosch", "Schaeffler India", "SKF India", "Timken India", "Motherson Sumi", 
-    "Endurance Technologies", "Uno Minda", "Sona BLW", "Craftsman Automation",
-    # Energy & Infrastructure
-    "Tata Power", "Suzlon Energy", "Inox Wind", "Jindal Steel", "JSW Steel", "Voltas"
+    "Larsen & Toubro", "L&T", "Tata Motors", "Tata Steel", "Mahindra", "Reliance", "Maruti", 
+    "Ashok Leyland", "Siemens", "ABB", "Cummins", "Thermax", "Honeywell", "Kirloskar", 
+    "Bharat Forge", "Bosch", "Schaeffler", "SKF", "Timken", "Motherson", "Jindal Steel", "JSW"
 ]
 
 def send_telegram(text):
@@ -37,68 +23,70 @@ def send_telegram(text):
     requests.get(url, params=params)
 
 def run_bot():
-    params = {
-        "engine": "google_jobs",
-        "q": "mechanical engineering internship India stipend",
-        "location": "India",
-        "api_key": SERP_KEY,
-        "chips": "date_posted:week"
-    }
+    queries = [
+        "mechanical engineering internship India stipend",
+        "site:unstop.com mechanical engineering internship",
+        "PSU mechanical apprenticeship 2026"
+    ]
 
-    search = GoogleSearch(params)
-    results = search.get_dict()
-    jobs = results.get("jobs_results", [])
-    
-    # LOAD SEEN LINKS (STRICT DEDUPLICATION)
+    # Initialize a counter for new links
+    new_links_found = 0
+
     seen = set()
     if os.path.exists(DB_FILE):
         with open(DB_FILE, "r") as f:
             seen = {line.strip() for line in f if line.strip()}
 
-    for job in jobs:
-        link = job.get("related_links", [{}])[0].get("link")
-        company = job.get("company_name", "Unknown Company")
-        title = job.get("title", "Mechanical Intern")
-        location = job.get("location", "India")
-        
-        extensions = job.get("detected_extensions", {})
-        posted_at = extensions.get("posted_at", "Recently")
-        salary = extensions.get("salary_pay", "Check Link")
+    for q in queries:
+        print(f"--- Searching: {q} ---")
+        try:
+            search = GoogleSearch({
+                "engine": "google_jobs",
+                "q": q,
+                "location": "India",
+                "api_key": SERP_KEY,
+                "chips": "date_posted:week"
+            })
+            results = search.get_dict().get("jobs_results", [])
 
-        # CHECK FOR REPEATS
-        if link and link not in seen:
-            header = "📋 *NEW OPENING*"
-            category = "Standard Opening"
-            
-            # PSU CHECK
-            if any(name.lower() in company.lower() for name in PSUS):
-                header = "🇮🇳 *[GOVT / PSU]*"
-                category = "Government Sector"
-            # REPUTABLE LISTED FIRM CHECK
-            elif any(name.lower() in company.lower() for name in LISTED_FIRMS):
-                header = "📈 *[LISTED TIER-1]*"
-                category = "Reputable Public Co."
+            for job in results:
+                link = job.get("related_links", [{}])[0].get("link")
+                company = job.get("company_name", "Unknown")
+                
+                if link and link not in seen:
+                    new_links_found += 1 # Increment the counter
+                    title = job.get("title", "Mechanical Intern")
+                    ext = job.get("detected_extensions", {})
+                    
+                    header = "📋 *NEW OPENING*"
+                    if any(p.lower() in company.lower() for p in PSUS):
+                        header = "🇮🇳 *[GOVT / PSU]*"
+                    elif any(f.lower() in company.lower() for f in LISTED_FIRMS):
+                        header = "📈 *[LISTED TIER-1]*"
 
-            # DOCUMENT FORMAT
-            msg = (
-                f"{header}\n"
-                f"━━━━━━━━━━━━━━━━━━━━\n"
-                f"🏢 *Company:* {company}\n"
-                f"🛠 *Role:* {title}\n"
-                f"📍 *Location:* {location}\n"
-                f"💰 *Stipend:* {salary}\n"
-                f"⏳ *Posted:* {posted_at}\n"
-                f"━━━━━━━━━━━━━━━━━━━━\n"
-                f"🔗 [Apply Here]({link})"
-            )
-            
-            send_telegram(msg)
-            
-            # SAVE TO DATABASE IMMEDIATELY
-            with open(DB_FILE, "a") as f:
-                f.write(link + "\n")
-            seen.add(link)
-            time.sleep(3)
+                    msg = (
+                        f"{header}\n"
+                        f"━━━━━━━━━━━━━━━━━━━━\n"
+                        f"🏢 *Company:* {company}\n"
+                        f"🛠 *Role:* {title}\n"
+                        f"💰 *Stipend:* {ext.get('salary_pay', 'Check Link')}\n"
+                        f"⏳ *Posted:* {ext.get('posted_at', 'Recently')}\n"
+                        f"━━━━━━━━━━━━━━━━━━━━\n"
+                        f"🔗 [Apply Here]({link})"
+                    )
+                    send_telegram(msg)
+                    
+                    with open(DB_FILE, "a") as f:
+                        f.write(link + "\n")
+                    seen.add(link)
+                    time.sleep(2)
+        except Exception as e:
+            print(f"Error during search: {e}")
+
+    # Final check: If no new links were processed across ALL queries
+    if new_links_found == 0:
+        status_msg = "📭 *Update:* No new mechanical engineering openings found in the last 24 hours. Search will resume in 12 hours."
+        send_telegram(status_msg)
 
 if __name__ == "__main__":
     run_bot()
